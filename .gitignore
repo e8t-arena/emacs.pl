@@ -1,0 +1,6 @@
+prv.txt
+elpa
+log
+tramp
+backup/**/*~
+session/*.desktop
