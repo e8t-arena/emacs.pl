@@ -1,144 +1,142 @@
-;; TOC
-;; 
-;;   Packages 
-;; 
-;;   Config
-;;
-;;   UI 
-;;    
-;;    
+;; ## Setup
 
-;; # ENV
+;; ### ENV
+
 ;; correctly set up the user-init-file and user-emacs-directory variables
 
-;;; Code:
 (setq user-init-file (or load-file-name (buffer-file-name)))
 (setq user-emacs-directory (file-name-directory user-init-file))
 
-;; # Helper
+;; ### Helper
 
 (defun getsubpath (path)
   (concat user-emacs-directory path))
 
-;; # Packages
+;; ### Packages
 
 (require 'package)
 
-;; (setq package-archives
-;;       '(("melpa" . "http://melpa.milkbox.net/packages/")
-;;         ("gnu" . "http://elpa.gnu.org/packages/")))
-
-(setq package-archives '(("gnu"   . "http://mirrors.tuna.tsinghua.edu.cn/elpa/gnu/")
-                         ("melpa" . "http://mirrors.tuna.tsinghua.edu.cn/elpa/melpa/")))
-(package-initialize) ;; You might already have this line
+;; https://mirrors.tuna.tsinghua.edu.cn/help/elpa/
+(setq package-archives '(
+                         ; ("gnu"   . "http://mirrors.tuna.tsinghua.edu.cn/elpa/gnu/")
+                         ; ("melpa" . "http://mirrors.tuna.tsinghua.edu.cn/elpa/melpa/")
+                         ("gnu-ec"   . "http://elpa.emacs-china.org/gnu/")
+                         ("melpa-ec" . "http://elpa.emacs-china.org/melpa/")
+                         ))
+(package-initialize)
 
 ; fetch the list of packages available
 (unless package-archive-contents
   (package-refresh-contents))
 
-; Only evaluate this when compiling this file
-(eval-when-compile
-  ; For each package on the list do 
-  (dolist (package '(use-package diminish bind-key))
-    ; Install if not yet installed
-    (unless (package-installed-p package)
-      (package-install package)))
-    ; Require package making it available on the rest of the configuration
-  (require 'package))
+(defvar my-packages
+  '(;; makes handling lisp expressions much, much easier
+    ;; Cheatsheet: http://www.emacswiki.org/emacs/PareditCheatsheet
+    paredit
 
+    ;; key bindings and code colorization for Clojure
+    ;; https://github.com/clojure-emacs/clojure-mode
+    clojure-mode
+
+    ;; extra syntax highlighting for clojure
+    clojure-mode-extra-font-locking
+
+    ;; integration with a Clojure REPL
+    ;; https://github.com/clojure-emacs/cider
+    cider
+
+    ;; allow ido usage in as many contexts as possible. see
+    ;; customizations/navigation.el line 23 for a description
+    ;; of ido
+    ido-completing-read+
+
+    ;; Enhances M-x to allow easier execution of commands. Provides
+    ;; a filterable list of possible commands in the minibuffer
+    ;; http://www.emacswiki.org/emacs/Smex
+    smex
+
+    ;; project navigation
+    projectile
+
+    ;; colorful parenthesis matching
+    rainbow-delimiters
+
+    ;; edit html tags like sexps
+    tagedit
+
+    ;; git integration
+    magit
+
+    ;; dracula theme 
+    dracula-theme
+    ))
+
+;; copying important environment variables from the user's shell.
+(if (eq system-type 'darwin)
+    (add-to-list 'my-packages 'exec-path-from-shell))
+
+(dolist (p my-packages)
+  (when (not (package-installed-p p))
+    (package-install p)))
+
+;; packages installed by hand
 (add-to-list 'load-path 
-             (getsubpath "pkgs"))
-; (load "dev")
-(load-file (getsubpath "pkgs/dev.el"))
+             (getsubpath "vendor"))
 
+(load "sandbox.el")
 
-;; # Config
+;; Customization
+(add-to-list 'load-path 
+             (getsubpath "custom"))
+(load "shell-integration.el")
+(load "navigation.el")
+(load "ui.el")
+(load "editing.el")
+(load "misc.el")
+(load "elisp-editing.el")
+(load "circe.el")
 
-;; UTF-8 as default encoding
-(set-language-environment "UTF-8")
-(set-default-coding-systems 'utf-8-unix)
+;; Langauage-specific
+(load "setup-clojure.el")
+(load "setup-js.el")
+;; (load "setup-agda.el")
 
-;; Automatically save and restore sessions
-(setq desktop-dirname             (getsubpath "session")
-      desktop-base-file-name      "emacs.desktop"
-      desktop-base-lock-name      "lock"
-      desktop-path                (list desktop-dirname)
-      desktop-save                t
-      desktop-files-not-to-save   "^$" ;reload tramp paths
-      desktop-load-locked-desktop nil
-      desktop-auto-save-timeout   30)
+;; Map Alt key to Meta
+;; (setq x-alt-keysym 'meta)
 
-;; **IMPORTANT**: comment next line before debugging UI
-(desktop-save-mode t)
-(global-auto-revert-mode 1)
+;; MarkSet 冲突
+(global-unset-key (kbd "C-SPC"))
+(global-set-key (kbd "M-SPC") 'set-mark-command)
 
-;; backup
-;; make backup to a designated dir, mirroring the full path
+;; 切换窗口分割方向
+(defun window-split-toggle ()
+  "Toggle between horizontal and vertical split with two windows."
+  (interactive)
+  (if (> (length (window-list)) 2)
+      (error "Can't toggle with more than 2 windows!")
+    (let ((func (if (window-full-height-p)
+                    #'split-window-vertically
+                  #'split-window-horizontally)))
+      (delete-other-windows)
+      (funcall func)
+      (save-selected-window
+        (other-window 1)
+        (switch-to-buffer (other-buffer))))))
 
-(defun my-backup-file-name (fpath)
-  "Return a new file path of a given file path.
-If the new path's directories does not exist, create them."
-  (let* (
-        (backupRootDir (getsubpath "backup"))
-        (filePath (replace-regexp-in-string "[A-Za-z]:" "" fpath )) ; remove Windows driver letter in path, for example, “C:”
-        (backupFilePath (replace-regexp-in-string "//" "/" (concat backupRootDir filePath "~") ))
-        )
-    (make-directory (file-name-directory backupFilePath) (file-name-directory backupFilePath))
-    backupFilePath
-  )
-)
-
-(setq make-backup-file-name-function 'my-backup-file-name)
-
-
-
-;; # UI
-;; t/1 on -1 off
-(setq inhibit-splash-screen t
-       initial-scratch-message nil)
-
-;; don't show toolbar
-(tool-bar-mode -1)
-;; show menu bar
-(menu-bar-mode t)
-(show-paren-mode t)
-(scroll-bar-mode -1)
-
-;; show line number
-(when (version<= "26.0.50" emacs-version )
-  (global-display-line-numbers-mode))
-
-(column-number-mode 1)
-
-;; geometry
-
-(setq default-frame-alisth
-      '((height . 35) (width . 100) (top . 20) (left . 20) (menu-bar-lines . 20) (tool-bar-lines . 0)))
-
-;; (add-to-list 'default-frame-alist '(width  . 90))
-;; (add-to-list 'default-frame-alist '(height . 40))
-(add-to-list 'default-frame-alist '(font . "Monospace-15"))
-
-;; # Custom Funtion
-(defun run-server ()
-  "Runs the Emacs server if it is not running"
-  (require 'server)
-  (unless (server-running-p)
-    (server-start)))
-
-;; # Init 
-;; (run-server)
-
-;; Auto Append
-
+;; ## UI
+;
+;; ## Dev
+;
+;; ## System
 (custom-set-variables
  ;; custom-set-variables was added by Custom.
  ;; If you edit it by hand, you could mess it up, so be careful.
  ;; Your init file should contain only one such instance.
  ;; If there is more than one, they won't work right.
+ '(coffee-tab-width 2)
  '(package-selected-packages
    (quote
-    (company flycheck delight yasnippet-snippets yasnippet ivy-erlang-complete elixir-mode use-package diminish))))
+    (circe clojure-mode paredit exec-path-from-shell yasnippet-snippets use-package ivy-erlang-complete flycheck elixir-mode diminish delight company))))
 (custom-set-faces
  ;; custom-set-faces was added by Custom.
  ;; If you edit it by hand, you could mess it up, so be careful.
