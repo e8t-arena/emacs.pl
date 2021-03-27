@@ -21,3 +21,6 @@ tramp
 pre_readme.txt
 v1.el
 el_snippets.el
+custom/circe*
+test
+transient

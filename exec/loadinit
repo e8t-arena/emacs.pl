@@ -1,0 +1,4 @@
+; vi: ft=elisp
+
+(load-file 
+  (concat (file-name-as-directory (getenv "HQ_EMACS_HOME")) "init.el" ))
